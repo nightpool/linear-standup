@@ -178,10 +178,10 @@
   }
 
   function formatTime(ms) {
-    const totalSec = Math.floor(ms / 1000);
-    const min = Math.floor(totalSec / 60);
-    const sec = totalSec % 60;
-    return `${min}:${sec.toString().padStart(2, '0')}`;
+    const tenths = Math.floor(ms / 100);
+    const sec = Math.floor(tenths / 10) % 60;
+    const min = Math.floor(tenths / 600);
+    return `${min}:${sec.toString().padStart(2, '0')}.${tenths % 10}`;
   }
 
   function createTimer(rowEl) {
@@ -200,7 +200,7 @@
     const start = Date.now();
     const interval = setInterval(() => {
       span.textContent = formatTime(Date.now() - start);
-    }, 1000);
+    }, 100);
 
     return function stop() {
       clearInterval(interval);
