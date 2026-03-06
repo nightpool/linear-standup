@@ -1,0 +1,70 @@
+.standup-timer {
+  margin-left: 12px;
+  font-weight: 700;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+}
+
+.standup-timer--active {
+  color: #ff4444;
+}
+
+.standup-timer--done {
+  color: #44ff44;
+}
+
+.standup-complete-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+}
+
+.standup-complete-card {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 40px;
+  text-align: center;
+  color: #fff;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.standup-complete-check {
+  font-size: 48px;
+  color: #44ff44;
+  margin-bottom: 12px;
+}
+
+.standup-complete-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.standup-complete-time {
+  font-size: 16px;
+  color: #aaa;
+  margin-bottom: 24px;
+}
+
+.standup-complete-close {
+  background: #5e6ad2;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.standup-complete-close:hover {
+  background: #4e5bc2;
+}
