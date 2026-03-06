@@ -11,20 +11,21 @@
 
   // --- DOM Helpers ---
 
+  const GROUP_BTN_SELECTOR = 'button[aria-label="Open group"], button[aria-label="Collapse group"]';
+
   function findContainer() {
-    const btns = document.querySelectorAll('button[aria-label="Open group"]');
+    const btns = document.querySelectorAll(GROUP_BTN_SELECTOR);
     if (btns.length === 0) return null;
 
-    // Walk up from the first "Open group" button to find the container
+    // Walk up from the first group button to find the container
     // The container is the element whose children are all the user rows
     let el = btns[0];
     for (let i = 0; i < 15; i++) {
       el = el.parentElement;
       if (!el) return null;
-      // Check if this element contains multiple "Open group" buttons as direct-child descendants
       const childGroupBtns = [];
       for (const child of el.children) {
-        if (child.querySelector('button[aria-label="Open group"]')) {
+        if (child.querySelector(GROUP_BTN_SELECTOR)) {
           childGroupBtns.push(child);
         }
       }
@@ -52,11 +53,12 @@
   }
 
   function getGroupButton(rowEl) {
-    return rowEl.querySelector('button[aria-label="Open group"], button[aria-label="Close group"]');
+    return rowEl.querySelector(GROUP_BTN_SELECTOR);
   }
 
   function isGroupOpen(rowEl) {
-    return !!rowEl.querySelector('button[aria-label="Close group"]');
+    const btn = getGroupButton(rowEl);
+    return btn && btn.getAttribute('aria-label') === 'Collapse group';
   }
 
   // Find the count span to insert timer after it
@@ -152,7 +154,24 @@
 
   // --- Core ---
 
-  function startStandup() {
+  function disableVirtualizer() {
+    const scroller = document.querySelector('[data-virtuoso-scroller]');
+    if (scroller && scroller.parentElement) {
+      scroller.parentElement.style.height = '99999px';
+      scroller.parentElement.style.overflow = 'hidden';
+      scroller.parentElement.style.overscrollBehavior = 'unset';
+      scroller.parentElement.style.scrollPadding = 'unset';
+      scroller.parentElement.parentElement.style.overflow = 'scroll';
+    }
+  }
+
+  async function startStandup() {
+    // Disable the virtual list so all user rows are rendered in the DOM
+    disableVirtualizer();
+
+    // Wait for the virtualizer to re-render all rows
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
     const container = findContainer();
     if (!container) {
       return { error: 'Could not find user rows. Is this a standup view?' };
@@ -163,18 +182,19 @@
     const userRowElements = [];
     const nonUserRows = [];
 
+    const excludedRows = [];
+
     for (const child of allChildren) {
-      const btn = child.querySelector('button[aria-label="Open group"]');
+      const btn = child.querySelector(GROUP_BTN_SELECTOR);
       if (btn) {
         const name = getUserName(child);
         if (isExcluded(name)) {
-          child.style.display = 'none';
+          excludedRows.push(child);
         } else {
           userRowElements.push(child);
           // Close any open groups
           if (isGroupOpen(child)) {
-            const closeBtn = child.querySelector('button[aria-label="Close group"]');
-            if (closeBtn) closeBtn.click();
+            getGroupButton(child).click();
           }
         }
       } else {
@@ -189,8 +209,12 @@
     // Shuffle
     shuffle(userRowElements);
 
-    // Re-order in DOM
+    // Re-order in DOM: active users, then excluded (deemphasized), then non-user rows
     for (const row of userRowElements) {
+      container.appendChild(row);
+    }
+    for (const row of excludedRows) {
+      row.classList.add('standup-excluded');
       container.appendChild(row);
     }
     for (const row of nonUserRows) {
@@ -202,19 +226,22 @@
     standupActive = true;
     standupStartTime = Date.now();
 
+    // Automatically start the first user
+    advanceToNext();
+
     return { ok: true };
   }
 
   function advanceToNext() {
     if (!standupActive) return;
 
-    // Stop current user's timer and close their group
+    // Stop current user's timer and collapse their group
     if (currentIndex >= 0 && currentIndex < userRows.length) {
       const currentRow = userRows[currentIndex];
       stopTimer(currentRow);
-      if (isGroupOpen(currentRow)) {
-        const closeBtn = currentRow.querySelector('button[aria-label="Close group"]');
-        if (closeBtn) closeBtn.click();
+      const btn = getGroupButton(currentRow);
+      if (btn && btn.getAttribute('aria-label') === 'Collapse group') {
+        btn.click();
       }
     }
 
@@ -227,18 +254,28 @@
       return;
     }
 
-    // Open next user's group and start timer
+    // Expand the next user's group, then scroll into view after it renders
     const nextRow = userRows[currentIndex];
-    const openBtn = nextRow.querySelector('button[aria-label="Open group"]');
-    if (openBtn) openBtn.click();
-
-    // Scroll the row into view
-    nextRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
+    const btn = getGroupButton(nextRow);
+    if (btn && btn.getAttribute('aria-label') === 'Open group') {
+      btn.click();
+    }
     startTimer(nextRow);
+
+    let debounceTimer;
+    const observer = new ResizeObserver(() => {
+      nextRow.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        observer.disconnect();
+        nextRow.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+    });
+    observer.observe(nextRow);
   }
 
   function showComplete() {
+    userRows[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
     const totalTime = formatTime(Date.now() - standupStartTime);
     const overlay = document.createElement('div');
     overlay.className = 'standup-complete-overlay';
@@ -260,22 +297,13 @@
 
   document.addEventListener('keydown', (e) => {
     if (!standupActive) return;
-    // Don't capture space if user is typing in an input
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-
     if (e.code === 'Space') {
       e.preventDefault();
       e.stopPropagation();
       advanceToNext();
     }
-  }, true); // use capture phase to intercept before Linear's handlers
+  }, true);
 
-  // Listen for messages from popup
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    if (msg.action === 'startStandup') {
-      const result = startStandup();
-      sendResponse(result);
-    }
-    return true;
-  });
+  startStandup();
 })();
