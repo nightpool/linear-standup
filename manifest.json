@@ -3,9 +3,11 @@
   "name": "Linear Standup",
   "version": "1.0",
   "description": "Randomize standup order, track time per person, and navigate with spacebar",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["scripting", "storage"],
+  "host_permissions": ["https://linear.app/*"],
   "action": {
-    "default_title": "Linear Standup"
+    "default_title": "Linear Standup",
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js"

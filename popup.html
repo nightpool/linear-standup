@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 16px;
+    }
+
+    h1 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      color: #fff;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #999;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #333;
+      border-radius: 6px;
+      background: #0f0f1a;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+    }
+
+    input[type="text"]:focus {
+      border-color: #5e6ad2;
+    }
+
+    .field { margin-bottom: 14px; }
+
+    .chip-section {
+      margin-bottom: 14px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 28px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .chip--include {
+      background: #1e2a1e;
+      color: #6fcf6f;
+      border: 1px solid #2a3f2a;
+    }
+
+    .chip--exclude {
+      background: #2a1e1e;
+      color: #cf6f6f;
+      border: 1px solid #3f2a2a;
+    }
+
+    .chip button {
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 0 2px;
+      line-height: 1;
+      opacity: 0.7;
+    }
+
+    .chip button:hover { opacity: 1; }
+
+    .empty-msg {
+      font-size: 11px;
+      color: #555;
+      font-style: italic;
+    }
+
+    #start-btn {
+      width: 100%;
+      padding: 10px;
+      background: #5e6ad2;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+
+    #start-btn:hover { background: #4e5bc2; }
+  </style>
+</head>
+<body>
+  <h1>Linear Standup</h1>
+
+  <div class="field">
+    <label for="url-input">Standup URL</label>
+    <input type="text" id="url-input" placeholder="https://linear.app/team/standup/...">
+  </div>
+
+  <div class="chip-section">
+    <label>Include</label>
+    <div class="chips" id="include-chips"></div>
+  </div>
+
+  <div class="chip-section">
+    <label>Exclude</label>
+    <div class="chips" id="exclude-chips"></div>
+  </div>
+
+  <button id="start-btn">Start Standup</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 (() => {
-  const EXCLUDED = ['colby', 'reece', 'sam', 'jason', 'no assignee'];
+  let excludedUsers = [];
 
   let standupActive = false;
   let userRows = []; // filtered, shuffled user row elements
@@ -49,7 +49,8 @@
 
   function isExcluded(name) {
     const lower = name.toLowerCase();
-    return EXCLUDED.some(ex => lower.includes(ex));
+    if (lower === 'no assignee') return true;
+    return excludedUsers.some(ex => ex.toLowerCase() === lower);
   }
 
   function getGroupButton(rowEl) {
@@ -154,23 +155,35 @@
 
   // --- Core ---
 
-  function disableVirtualizer() {
-    const scroller = document.querySelector('[data-virtuoso-scroller]');
-    if (scroller && scroller.parentElement) {
-      scroller.parentElement.style.height = '99999px';
-      scroller.parentElement.style.overflow = 'hidden';
-      scroller.parentElement.style.overscrollBehavior = 'unset';
-      scroller.parentElement.style.scrollPadding = 'unset';
-      scroller.parentElement.parentElement.style.overflow = 'scroll';
+  async function disableVirtualizer() {
+    let scroller = document.querySelector('[data-virtuoso-scroller]');
+    if (!scroller) {
+      scroller = await new Promise((resolve) => {
+        const observer = new MutationObserver(() => {
+          const el = document.querySelector('[data-virtuoso-scroller]');
+          if (el) {
+            observer.disconnect();
+            resolve(el);
+          }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+      });
     }
+    scroller.parentElement.style.height = '99999px';
+    scroller.parentElement.style.overflow = 'hidden';
+    scroller.parentElement.style.overscrollBehavior = 'unset';
+    scroller.parentElement.style.scrollPadding = 'unset';
+    scroller.parentElement.parentElement.style.overflow = 'scroll';
+
+    // Let the virtualizer re-render all rows
+    await new Promise(resolve => setTimeout(resolve, 250));
   }
 
-  async function startStandup() {
-    // Disable the virtual list so all user rows are rendered in the DOM
-    disableVirtualizer();
+  async function startStandup(excluded) {
+    excludedUsers = excluded;
 
-    // Wait for the virtualizer to re-render all rows
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    // Wait for the virtualizer to appear, then disable it so all rows render
+    await disableVirtualizer();
 
     const container = findContainer();
     if (!container) {
@@ -181,6 +194,7 @@
     const allChildren = Array.from(container.children);
     const userRowElements = [];
     const nonUserRows = [];
+    const allUserNames = [];
 
     const excludedRows = [];
 
@@ -188,6 +202,9 @@
       const btn = child.querySelector(GROUP_BTN_SELECTOR);
       if (btn) {
         const name = getUserName(child);
+        if (name && name.toLowerCase() !== 'no assignee') {
+          allUserNames.push(name);
+        }
         if (isExcluded(name)) {
           excludedRows.push(child);
         } else {
@@ -200,6 +217,11 @@
       } else {
         nonUserRows.push(child);
       }
+    }
+
+    // Save discovered users for the popup
+    if (allUserNames.length > 0) {
+      chrome.storage.local.set({ knownUsers: allUserNames });
     }
 
     if (userRowElements.length === 0) {
@@ -225,9 +247,6 @@
     currentIndex = -1;
     standupActive = true;
     standupStartTime = Date.now();
-
-    // Automatically start the first user
-    advanceToNext();
 
     return { ok: true };
   }
@@ -305,5 +324,9 @@
     }
   }, true);
 
-  startStandup();
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.action === 'initStandup') {
+      startStandup(msg.excludedUsers || []);
+    }
+  });
 })();
