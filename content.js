@@ -14,6 +14,11 @@
       e.stopPropagation();
       advanceToNext();
     }
+    if (e.code === 'Backspace') {
+      e.preventDefault();
+      e.stopPropagation();
+      goBack();
+    }
   }, true);
 
   chrome.runtime.onMessage.addListener((msg) => {
@@ -83,7 +88,7 @@
     }
   }
 
-  function advanceToNext() {
+  async function advanceToNext() {
     if (!standupActive) return;
 
     if (standupRows[currentIndex]) {
@@ -101,9 +106,80 @@
     startRow(standupRows[currentIndex]);
   }
 
+  function goBack() {
+    if (!standupActive || currentIndex <= 0) return;
+
+    stopRow(standupRows[currentIndex]);
+    currentIndex--;
+    startRow(standupRows[currentIndex]);
+  }
+
+  // Watch for SPA navigation: when standupRows go stale, reattach on return
+  new MutationObserver(() => {
+    if (!standupActive || standupRows.length === 0) return;
+    if (standupRows[0].el.isConnected) return;
+    reattach();
+  }).observe(document.body, { childList: true, subtree: true });
+
+  async function reattach() {
+    await disableVirtualizer();
+
+    const container = document.querySelector('[data-testid="virtuoso-item-list"]');
+    if (!container) return;
+
+    // Map new DOM elements by name
+    const elByName = new Map();
+    const nonUserEls = [];
+    for (const el of container.children) {
+      if (el.querySelector(GROUP_BTN_SELECTOR)) {
+        elByName.set(rowName(el), el);
+      } else {
+        nonUserEls.push(el);
+      }
+    }
+
+    // Update standupRows with new DOM elements, preserving order and elapsed
+    for (let i = 0; i < standupRows.length; i++) {
+      const row = standupRows[i];
+      const newEl = elByName.get(row.name);
+      if (!newEl) continue;
+
+      row.el = newEl;
+      row.stopTimer = null;
+
+      if (i < currentIndex && row.elapsed) {
+        // Completed row: restore done timer
+        toggleGroup(row.el, { open: false });
+        createDoneTimer(row.el, row.elapsed);
+      } else if (i === currentIndex) {
+        // Current row: compute elapsed and restart live timer
+        if (row.timerStart) row.elapsed = Date.now() - row.timerStart;
+        startRow(row);
+      } else {
+        // Future row: just close it
+        toggleGroup(row.el, { open: false });
+      }
+    }
+
+    // Re-sort DOM: standupRows first (in saved order), then excluded, then rest
+    for (const row of standupRows) {
+      container.appendChild(row.el);
+    }
+    for (const [name, el] of elByName) {
+      if (!standupRows.some(r => r.name === name)) {
+        el.classList.add('standup-excluded');
+        container.appendChild(el);
+      }
+    }
+    for (const el of nonUserEls) {
+      container.appendChild(el);
+    }
+  }
+
   function startRow(row) {
     toggleGroup(row.el, { open: true });
-    row.stopTimer = createTimer(row.el);
+    row.timerStart = Date.now() - (row.elapsed || 0);
+    row.stopTimer = createTimer(row.el, row.elapsed || 0);
     let debounceTimer;
     const observer = new ResizeObserver(() => {
       row.el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -117,7 +193,7 @@
   }
 
   function stopRow(row) {
-    if (row.stopTimer) row.stopTimer();
+    if (row.stopTimer) row.elapsed = row.stopTimer();
     toggleGroup(row.el, { open: false });
   }
 
@@ -184,10 +260,30 @@
     return `${min}:${sec.toString().padStart(2, '0')}.${tenths % 10}`;
   }
 
-  function createTimer(rowEl) {
+  function createDoneTimer(rowEl, elapsed) {
+    const existing = rowEl.querySelector('.standup-timer');
+    if (existing) existing.remove();
+
+    const span = document.createElement('span');
+    span.className = 'standup-timer standup-timer--done';
+    span.textContent = formatTime(elapsed);
+
+    const countSpan = [...rowEl.querySelectorAll('span')].find(s => /^\d+$/.test(s.textContent.trim()));
+    if (countSpan) {
+      countSpan.parentElement.insertAdjacentElement('afterend', span);
+    } else {
+      const innerDiv = rowEl.querySelector(GROUP_BTN_SELECTOR)?.parentElement?.parentElement;
+      if (innerDiv) innerDiv.appendChild(span);
+    }
+  }
+
+  function createTimer(rowEl, initialElapsed = 0) {
+    const existing = rowEl.querySelector('.standup-timer');
+    if (existing) existing.remove();
+
     const span = document.createElement('span');
     span.className = 'standup-timer standup-timer--active';
-    span.textContent = formatTime(0);
+    span.textContent = formatTime(initialElapsed);
 
     const countSpan = [...rowEl.querySelectorAll('span')].find(s => /^\d+$/.test(s.textContent.trim()));
     if (countSpan) {
@@ -197,16 +293,18 @@
       if (innerDiv) innerDiv.appendChild(span);
     }
 
-    const start = Date.now();
+    const start = Date.now() - initialElapsed;
     const interval = setInterval(() => {
       span.textContent = formatTime(Date.now() - start);
     }, 100);
 
     return function stop() {
       clearInterval(interval);
-      span.textContent = formatTime(Date.now() - start);
+      const elapsed = Date.now() - start;
+      span.textContent = formatTime(elapsed);
       span.classList.remove('standup-timer--active');
       span.classList.add('standup-timer--done');
+      return elapsed;
     };
   }
 })();
