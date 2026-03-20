@@ -42,17 +42,18 @@
       if (!el.querySelector(GROUP_BTN_SELECTOR)) {
         return {el, isUser: false};
       }
-      
+
       toggleGroup(el, { open: false });
 
       const name = rowName(el);
-      const excluded = isExcluded(name);
+      const isUser = !!name;
+      const excluded = !isUser || isExcluded(name);
       if (excluded) el.classList.add('standup-excluded');
       return {
         el,
         name,
-        isUser: true,
-        excluded: excluded,
+        isUser,
+        excluded,
         randomKey: Math.random(),
       };
     });
@@ -81,7 +82,7 @@
 
   function saveKnownUsers(allRows) {
     const names = allRows
-      .filter(r => r.isUser && r.name && r.name.toLowerCase() !== 'no assignee')
+      .filter(r => r.isUser)
       .map(r => r.name);
     if (names.length > 0) {
       chrome.storage.local.set({ knownUsers: names });
@@ -247,10 +248,13 @@
 
   // --- Helpers ---
 
-  function rowName(rowEl) {
-    const span = [...rowEl.querySelectorAll('span')]
-      .find(s => { const t = s.textContent.trim(); return t && t.length > 1 && !/^\d+$/.test(t); });
-    return span ? span.textContent.trim() : '';
+  function rowName(row) {
+    const profileLink = row.querySelector('a[href*="/profiles/"]');
+    if (profileLink) return profileLink.textContent.trim();
+    const avatarDiv = row.querySelector('div[aria-label]');
+    if (avatarDiv) return avatarDiv.getAttribute('aria-label');
+    const avatarImg = row.querySelector('img[alt]');
+    if (avatarImg) return avatarImg.getAttribute('alt').replace(/^Avatar of /, '');
   }
 
   function formatTime(ms) {
