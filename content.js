@@ -9,7 +9,7 @@
   document.addEventListener('keydown', (e) => {
     if (!standupActive) return;
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-    if (e.code === 'Space') {
+    if (e.code === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
       advanceToNext();
